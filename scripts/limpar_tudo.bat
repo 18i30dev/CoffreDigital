@@ -1,5 +1,5 @@
 @echo off
-cd /d "%~dp0"
+cd /d "%~dp0\.."
 echo ====================================
 echo  LIMPEZA TOTAL DO COFRE DIGITAL
 echo ====================================
@@ -11,10 +11,11 @@ echo /p "Deseja continuar? (S/N): " opcao
 if /i "%opcao%"=="S" (
     echo.
     echo Apagando banco de dados e arquivos relacionados...
-    del /f /q "cofre.db" 2>nul
-    del /f /q "recovery.key" 2>nul
-    del /f /q "recovery_view.key" 2>nul
-    del /f /q "backup_senhas.txt" 2>nul
+    del /f /q "data\cofre.db" 2>nul
+    del /f /q "data\recovery.key" 2>nul
+    del /f /q "data\recovery_view.key" 2>nul
+    del /f /q "data\backup_senhas.txt" 2>nul
+    del /f /q "data\cofre.salt" 2>nul
     echo.
     echo Limpeza concluida com sucesso!
     echo.

@@ -1,3 +1,3 @@
 @echo off
-cd /d "%~dp0"
-pythonw cofre.py
+cd /d "%~dp0\.."
+pythonw coffredigital/core.pyw

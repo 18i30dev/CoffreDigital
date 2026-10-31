@@ -1,6 +1,7 @@
 import customtkinter as ctk
 import sqlite3
 import os
+import time
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
@@ -11,6 +12,7 @@ import secrets
 import ctypes
 import sys
 
+
 # Diretório base do projeto (funciona tanto em desenvolvimento quanto em executável PyInstaller)
 if getattr(sys, 'frozen', False):
     # Executável PyInstaller: usa o diretório do .exe
@@ -19,14 +21,19 @@ else:
     # Execução via Python: usa o diretório do projeto (um nível acima deste arquivo)
     BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+# Garante que a pasta de dados exista (necessario no executavel PyInstaller)
+DATA_DIR = os.path.join(BASE_DIR, "data")
+if not os.path.exists(DATA_DIR):
+    os.makedirs(DATA_DIR, exist_ok=True)
+
 
 def resource_path(caminho_relativo):
     """Resolve caminho de recursos (icone, etc.) em desenvolvimento e no .exe."""
-    if getattr(sys, 'frozen', False):
-        # No modo frozen, o PyInstaller extrai arquivos para sys._MEIPASS
-        base = getattr(sys, '_MEIPASS', os.path.dirname(sys.executable))
+    if getattr(sys, "frozen", False):
+        base = getattr(sys, "_MEIPASS", os.path.dirname(sys.executable))
         return os.path.join(base, caminho_relativo)
     return os.path.join(BASE_DIR, caminho_relativo)
+
 
 # ============================
 # Dialogs personalizados (estilo CustomTkinter)
@@ -226,6 +233,9 @@ def restaurar_janela_existente():
         if hwnd:
             user32.ShowWindow(hwnd, 9)   # SW_RESTORE
             user32.SetForegroundWindow(hwnd)
+            # Reposiciona para coordenadas visiveis
+            user32.SetWindowPos(hwnd, 0, 100, 100, 0, 0,
+                                0x0001 | 0x0004 | 0x0040)  # SWP_NOSIZE | SWP_NOZORDER | SWP_SHOWWINDOW
             return True
     return False
 
@@ -237,12 +247,6 @@ def liberar_mutex():
         ctypes.windll.kernel32.CloseHandle(mutex_handle)
         mutex_handle = None
 
-
-import pystray
-from PIL import Image
-
-# Variavel global para o icone da bandeja
-tray_icon = None
 
 # ----------------------------
 # Configuracao visual
@@ -345,22 +349,6 @@ class BancoSenhas:
         cursor = self.conexao.cursor()
         cursor.execute("UPDATE senhas SET excluido = 1 WHERE id=?", (id_,))
         self.conexao.commit()
-
-    def fazer_backup_texto(self):
-        """Exporta todas as senhas descriptografadas para um arquivo de texto na pasta do programa."""
-        senhas = self.listar_todas()
-        with open(os.path.join(BASE_DIR, "data", "backup_senhas.txt"), "w", encoding="utf-8") as f:
-            f.write("=== BACKUP DO COFRE DIGITAL ===\n")
-            f.write("Gerado automaticamente ao salvar senhas.\n")
-            f.write("ATENCAO: este arquivo contem senhas em texto puro. Nao compartilhe.\n\n")
-            for id_, servico, usuario, senha, excluida in senhas:
-                status = " (EXCLUIDA)" if excluida else ""
-                f.write(f"Servico: {servico}{status}\n")
-                f.write(f"Usuario: {usuario if usuario else '-'}\n")
-                f.write(f"Senha: {senha}\n")
-                f.write("-" * 30 + "\n")
-
-
 class TelaLogin(ctk.CTkToplevel):
     """Primeira janela: pede a senha mestre para desbloquear o cofre."""
 
@@ -383,6 +371,12 @@ class TelaLogin(ctk.CTkToplevel):
         self.botao = ctk.CTkButton(self, text="Entrar", command=self.tentar_login)
         self.botao.pack(pady=10)
 
+        self.btn_criar = ctk.CTkButton(
+            self, text="Criar senha mestre", command=self.criar_senha_mestre, width=200,
+            fg_color="gray30", hover_color="gray40"
+        )
+        self.btn_criar.pack(pady=5)
+
         self.btn_recuperacao = ctk.CTkButton(
             self, text="Esqueci a senha mestre", command=self.abrir_recuperacao, width=200, fg_color="gray40", hover_color="gray30"
         )
@@ -398,7 +392,6 @@ class TelaLogin(ctk.CTkToplevel):
     def tentar_login(self):
         # Verifica se esta bloqueado por forca bruta
         if self.bloqueado_ate is not None:
-            import time
             if time.time() < self.bloqueado_ate:
                 restante = int(self.bloqueado_ate - time.time())
                 CTkMessageDialog(
@@ -418,6 +411,9 @@ class TelaLogin(ctk.CTkToplevel):
 
         caminho_db = os.path.join(BASE_DIR, "data", "cofre.db")
         if not os.path.exists(caminho_db):
+            if len(senha) < 8:
+                CTkMessageDialog("Atencao", "A senha mestre deve ter pelo menos 8 caracteres.", tipo="warning")
+                return
             banco = BancoSenhas(caminho_db, senha)
             recovery_key = gerar_chave_recuperacao()
             salvar_recovery(banco.fernet, recovery_key)
@@ -435,7 +431,6 @@ class TelaLogin(ctk.CTkToplevel):
             except Exception:
                 self.tentativas_falhas += 1
                 if self.tentativas_falhas >= self.LIMITE_TENTATIVAS:
-                    import time
                     self.bloqueado_ate = time.time() + (self.TEMPO_BLOQUEIO_MS / 1000)
                     CTkMessageDialog(
                         "Bloqueado",
@@ -444,6 +439,43 @@ class TelaLogin(ctk.CTkToplevel):
                     )
                 else:
                     CTkMessageDialog("Erro", "Senha mestre incorreta.", tipo="error")
+
+    def criar_senha_mestre(self):
+        """Cria a senha mestre na primeira execucao."""
+        caminho_db = os.path.join(BASE_DIR, "data", "cofre.db")
+        if os.path.exists(caminho_db):
+            CTkMessageDialog(
+                "Atencao",
+                "Ja existe uma senha mestre. Use o botao Entrar para fazer login.",
+                tipo="warning",
+            )
+            return
+
+        senha = CTkInputDialog("Criar senha mestre", "Digite a nova senha mestre:").result
+        if not senha:
+            return
+        if len(senha) < 8:
+            CTkMessageDialog("Atencao", "A senha mestre deve ter pelo menos 8 caracteres.", tipo="warning")
+            return
+
+        confirma = CTkInputDialog("Criar senha mestre", "Confirme a senha mestre:").result
+        if not confirma:
+            return
+        if senha != confirma:
+            CTkMessageDialog("Erro", "As senhas nao coincidem.", tipo="error")
+            return
+
+        try:
+            banco = BancoSenhas(caminho_db, senha)
+            recovery_key = gerar_chave_recuperacao()
+            salvar_recovery(banco.fernet, recovery_key)
+            salvar_recovery_visual(banco.fernet, recovery_key)
+            banco.conexao.close()
+            self.senha_correta = senha
+            self.mostrar_chave_recuperacao(recovery_key)
+            self.destroy()
+        except Exception as e:
+            CTkMessageDialog("Erro", f"Nao foi possivel criar a senha mestre: {e}", tipo="error")
 
     def mostrar_chave_recuperacao(self, recovery_key):
         """Exibe a chave de recuperacao para o usuario anotar antes de prosseguir."""
@@ -586,8 +618,9 @@ class AppCofre(ctk.CTkToplevel):
         self.title("Coffre Digital - Minhas Senhas")
         self.geometry("700x500")
 
-        # Ao clicar no X, esconde para a bandeja em vez de fechar
-        self.protocol("WM_DELETE_WINDOW", self.hide_window)
+        # Armazena o handle da janela para restauracao via Win32 API
+        self.update_idletasks()
+        self._hwnd = self.winfo_id()
 
         self.banco = BancoSenhas(os.path.join(BASE_DIR, "data", "cofre.db"), chave_mestre)
 
@@ -650,111 +683,42 @@ class AppCofre(ctk.CTkToplevel):
         self._resetar_inatividade()
 
     def _bloquear_por_inatividade(self):
-        """Esconde a janela e marca como bloqueada por inatividade."""
+        """Bloqueia a sessao por inatividade e pede senha ao restaurar."""
         self.bloqueado_por_inatividade = True
-        self.withdraw()
         CTkMessageDialog(
             "Sessao bloqueada",
             "Nao houve atividade por 5 minutos. O cofre foi bloqueado por seguranca.\n"
-            "Clique no icone da bandeja para desbloquear.",
+            "Abra o programa novamente e digite sua senha mestre.",
             tipo="warning",
         )
-        self._criar_icone_bandeja()
+
+    def _desbloquear_sessao(self):
+        """Pede a senha mestre quando a sessao esta bloqueada por inatividade."""
+        dialog = CTkInputDialog(
+            "Desbloquear sessao",
+            "Digite sua senha mestre:",
+            show="*",
+        )
+        if dialog.result:
+            try:
+                BancoSenhas(
+                    os.path.join(BASE_DIR, "data", "cofre.db"),
+                    dialog.result,
+                )
+                self.bloqueado_por_inatividade = False
+                self._resetar_inatividade()
+            except Exception:
+                pass
+        else:
+            pass
 
     # ----------------------------
     # Bandeja do sistema (tray)
     # ----------------------------
-    def hide_window(self):
-        """Esconde a janela e exibe o icone na bandeja do sistema."""
-        self.withdraw()
-        self._criar_icone_bandeja()
-
-    def _criar_icone_bandeja(self):
-        """Cria ou reativa o icone na bandeja do Windows."""
-        global tray_icon
-        if tray_icon is not None:
-            return
-
-        try:
-            imagem = Image.open(resource_path(os.path.join("coffredigital", "assets", "icon", "cadeado.ico")))
-        except Exception:
-            # Fallback: cria um icone simples se nao encontrar o arquivo
-            imagem = Image.new("RGB", (64, 64), color=(0, 122, 255))
-
-        menu = pystray.Menu(
-            pystray.MenuItem("Mostrar Coffre", self._mostrar_da_bandeja),
-            pystray.MenuItem("Sair", self._sair_da_bandeja)
-        )
-
-        tray_icon = pystray.Icon("CoffreDigital", imagem, "Coffre Digital", menu)
-        tray_icon.run_detached()
-
-    def _mostrar_da_bandeja(self, icon, item):
-        """Restaura a janela a partir da bandeja."""
-        global tray_icon
-
-        # Para o ícone da bandeja
-        if tray_icon:
-            tray_icon.stop()
-            tray_icon = None
-
-        # Mostra a janela diretamente (mesmo na thread do pystray, pode funcionar no Windows)
-        self.master.deiconify()
-        self.master.lift()
-        self.master.focus_force()
-        self.master.update()
-
-        self.deiconify()
-        self.lift()
-        self.focus_force()
-        self.update()
-
-        # Se estiver bloqueado por inatividade, pede senha
-        if self.bloqueado_por_inatividade:
-            dialog = CTkInputDialog(
-                "Desbloquear sessao",
-                "Digite sua senha mestre:",
-                show="*",
-            )
-            if dialog.result:
-                try:
-                    BancoSenhas(
-                        os.path.join(BASE_DIR, "data", "cofre.db"),
-                        dialog.result,
-                    )
-                    self.bloqueado_por_inatividade = False
-                    self._resetar_inatividade()
-                except Exception:
-                    self.withdraw()
-                    self._criar_icone_bandeja()
-            else:
-                self.withdraw()
-                self._criar_icone_bandeja()
-
-    def _sair_da_bandeja(self, icon, item):
-        """Fecha completamente o aplicativo a partir da bandeja.
-
-        O callback do pystray roda na thread do ícone, não na thread
-        principal do tkinter. self.destroy() direto dessa thread nao e
-        thread-safe e pode deixar o icone órfao na bandeja do Windows.
-        Usamos after() para pedir o encerramento na thread principal e
-        damos um tempo para o pystray remover o icone do shell antes de
-        destruir a janela.
-        """
-        global tray_icon
-        if tray_icon:
-            tray_icon.stop()
-            tray_icon = None
-        self.after(0, self.destroy)
-
     def quit_app(self):
         """Fecha completamente o aplicativo (botao Sair da janela)."""
-        global tray_icon
-        if tray_icon:
-            tray_icon.stop()
-            tray_icon = None
         liberar_mutex()
-        self.after(150, self.destroy)
+        self.destroy()
 
     def carregar_lista(self):
         """Limpa e reexibe todas as senhas salvas."""
@@ -874,11 +838,10 @@ class AppCofre(ctk.CTkToplevel):
 
         try:
             cursor = self.banco.conexao.cursor()
-            self.banco.fazer_backup_texto()
             cursor.execute("DELETE FROM senhas")
             self.banco.conexao.commit()
             self.carregar_lista()
-            CTkMessageDialog("Reset Total", "Todas as senhas foram apagadas. Um backup foi gerado em backup_senhas.txt antes do reset.", tipo="info")
+            CTkMessageDialog("Reset Total", "Todas as senhas foram apagadas de forma irreversivel.", tipo="info")
         except Exception as e:
             CTkMessageDialog("Erro", f"Nao foi possivel resetar: {e}", tipo="error")
 
@@ -941,11 +904,12 @@ if __name__ == "__main__":
     if outra_instancia_rodando():
         if not restaurar_janela_existente():
             CTkMessageDialog("Coffre Digital", "O programa ja esta em execucao.", tipo="warning")
+        liberar_mutex()
         sys.exit(0)
 
     raiz = ctk.CTk()
-    # Nao esconde a raiz: Toplevel precisa de pai visível para aparecer corretamente
-    # raiz.withdraw()
+    # Esconde a raiz (janela principal do tkinter) - usamos apenas Toplevels
+    raiz.withdraw()
 
     try:
         login = TelaLogin(raiz)
