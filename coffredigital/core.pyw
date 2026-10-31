@@ -694,31 +694,40 @@ class AppCofre(ctk.CTkToplevel):
 
         Se a sessao estiver bloqueada por inatividade, exige re-autenticacao
         antes de exibir o cofre novamente.
+
+        O callback do pystray roda na thread do ícone, nao na thread
+        principal do tkinter. Chamar self.deiconify() diretamente dali nao
+        e thread-safe e pode fazer a janela nao aparecer e o icone sumir.
+        Usamos self.after(0, ...) para agendar a restauracao na thread
+        principal.
         """
         global tray_icon
         if tray_icon:
             tray_icon.stop()
             tray_icon = None
 
-        # Garante que a janela raiz esteja visível antes de mostrar o Toplevel
-        if self.master:
-            self.master.deiconify()
+        def _restaurar():
+            # Garante que a janela raiz esteja visível antes de mostrar o Toplevel
+            if self.master:
+                self.master.deiconify()
 
-        if self.bloqueado_por_inatividade:
-            login = TelaLogin(self.master)
-            self.master.wait_window(login)
-            if login.senha_correta:
-                self.bloqueado_por_inatividade = False
+            if self.bloqueado_por_inatividade:
+                login = TelaLogin(self.master)
+                self.master.wait_window(login)
+                if login.senha_correta:
+                    self.bloqueado_por_inatividade = False
+                    self.deiconify()
+                    self.focus_force()
+                    self._resetar_inatividade()
+                else:
+                    # Senha incorreta ou cancelado: mantem escondido e recria icone
+                    self.withdraw()
+                    self._criar_icone_bandeja()
+            else:
                 self.deiconify()
                 self.focus_force()
-                self._resetar_inatividade()
-            else:
-                # Senha incorreta ou cancelado: mantem escondido e recria icone
-                self.withdraw()
-                self._criar_icone_bandeja()
-        else:
-            self.deiconify()
-            self.focus_force()
+
+        self.after(0, _restaurar)
 
     def _sair_da_bandeja(self, icon, item):
         """Fecha completamente o aplicativo a partir da bandeja.
