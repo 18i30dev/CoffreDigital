@@ -1,0 +1,23 @@
+# Arquivos com dados sensiveis (nunca subir para o GitHub)
+cofre.db
+recovery.key
+recovery_view.key
+backup_senhas.txt
+cofre.salt
+
+# Artefatos de build e compilados
+dist/
+build/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ambiente virtual (se usar)
+.venv/
+venv/
+.env
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
