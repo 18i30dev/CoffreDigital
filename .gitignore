@@ -1,4 +1,5 @@
 # Arquivos com dados sensiveis (nunca subir para o GitHub)
+data/
 cofre.db
 recovery.key
 recovery_view.key

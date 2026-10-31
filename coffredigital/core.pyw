@@ -11,6 +11,8 @@ import secrets
 import ctypes
 import sys
 
+# Diretório base do projeto (um nível acima deste arquivo)
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # ============================
 # Dialogs personalizados (estilo CustomTkinter)
@@ -99,8 +101,8 @@ class CTkConfirmDialog(ctk.CTkToplevel):
         self.result = True
         self.destroy()
 
-RECOVERY_ARQUIVO = "recovery.key"
-SALT_ARQUIVO = "cofre.salt"
+RECOVERY_ARQUIVO = os.path.join(BASE_DIR, "data", "recovery.key")
+SALT_ARQUIVO = os.path.join(BASE_DIR, "data", "cofre.salt")
 
 
 def carregar_ou_gerar_salt():
@@ -164,7 +166,7 @@ def tentar_recuperacao(recovery_key):
         return None
 
 
-RECOVERY_VISUAL_ARQUIVO = "recovery_view.key"
+RECOVERY_VISUAL_ARQUIVO = os.path.join(BASE_DIR, "data", "recovery_view.key")
 
 
 def salvar_recovery_visual(fernet_obj, recovery_key):
@@ -238,7 +240,9 @@ ctk.set_default_color_theme("blue")
 class BancoSenhas:
     """Gerencia o arquivo local (SQLite) e a criptografia das senhas."""
 
-    def __init__(self, arquivo="cofre.db", chave_mestre="", chave_fernet_direta=None, salt=None):
+    def __init__(self, arquivo=None, chave_mestre="", chave_fernet_direta=None, salt=None):
+        if arquivo is None:
+            arquivo = os.path.join(BASE_DIR, "data", "cofre.db")
         self.arquivo = arquivo
         self.chave_mestre = chave_mestre
         self.fernet = None          # Objeto que criptografa e descriptografa
@@ -331,7 +335,7 @@ class BancoSenhas:
     def fazer_backup_texto(self):
         """Exporta todas as senhas descriptografadas para um arquivo de texto na pasta do programa."""
         senhas = self.listar_todas()
-        with open("backup_senhas.txt", "w", encoding="utf-8") as f:
+        with open(os.path.join(BASE_DIR, "data", "backup_senhas.txt"), "w", encoding="utf-8") as f:
             f.write("=== BACKUP DO COFRE DIGITAL ===\n")
             f.write("Gerado automaticamente ao salvar senhas.\n")
             f.write("ATENCAO: este arquivo contem senhas em texto puro. Nao compartilhe.\n\n")
@@ -398,8 +402,9 @@ class TelaLogin(ctk.CTkToplevel):
             CTkMessageDialog("Atencao", "Digite uma senha.", tipo="warning")
             return
 
-        if not os.path.exists("cofre.db"):
-            banco = BancoSenhas("cofre.db", senha)
+        caminho_db = os.path.join(BASE_DIR, "data", "cofre.db")
+        if not os.path.exists(caminho_db):
+            banco = BancoSenhas(caminho_db, senha)
             recovery_key = gerar_chave_recuperacao()
             salvar_recovery(banco.fernet, recovery_key)
             salvar_recovery_visual(banco.fernet, recovery_key)
@@ -409,7 +414,7 @@ class TelaLogin(ctk.CTkToplevel):
             self.destroy()
         else:
             try:
-                banco = BancoSenhas("cofre.db", senha)
+                banco = BancoSenhas(caminho_db, senha)
                 self.senha_correta = senha
                 banco.conexao.close()
                 self.destroy()
@@ -532,14 +537,16 @@ class TelaRecuperacao(ctk.CTkToplevel):
             CTkMessageDialog("Atencao", "A senha deve ter pelo menos 8 caracteres.", tipo="warning")
             return
 
+        caminho_db = os.path.join(BASE_DIR, "data", "cofre.db")
+
         try:
-            banco_antigo = BancoSenhas("cofre.db", chave_fernet_direta=self.chave_fernet_recuperada)
+            banco_antigo = BancoSenhas(caminho_db, chave_fernet_direta=self.chave_fernet_recuperada)
             senhas_antigas = banco_antigo.listar_todas()
             banco_antigo.conexao.close()
 
-            os.remove("cofre.db")
+            os.remove(caminho_db)
 
-            banco_novo = BancoSenhas("cofre.db", nova)
+            banco_novo = BancoSenhas(caminho_db, nova)
             for id_, servico, usuario, senha, excluida in senhas_antigas:
                 if not excluida:
                     banco_novo.adicionar(servico, usuario, senha)
@@ -568,7 +575,7 @@ class AppCofre(ctk.CTkToplevel):
         # Ao clicar no X, esconde para a bandeja em vez de fechar
         self.protocol("WM_DELETE_WINDOW", self.hide_window)
 
-        self.banco = BancoSenhas("cofre.db", chave_mestre)
+        self.banco = BancoSenhas(os.path.join(BASE_DIR, "data", "cofre.db"), chave_mestre)
 
         self.titulo = ctk.CTkLabel(self, text="Meu Cofre de Senhas", font=("Arial", 20, "bold"))
         self.titulo.pack(pady=15)
@@ -655,7 +662,7 @@ class AppCofre(ctk.CTkToplevel):
             return
 
         try:
-            imagem = Image.open("cadeado.ico")
+            imagem = Image.open(os.path.join(BASE_DIR, "coffredigital", "assets", "icon", "cadeado.ico"))
         except Exception:
             # Fallback: cria um icone simples se nao encontrar o arquivo
             imagem = Image.new("RGB", (64, 64), color=(0, 122, 255))
@@ -831,7 +838,7 @@ class AppCofre(ctk.CTkToplevel):
             return
 
         try:
-            teste = BancoSenhas("cofre.db", senha)
+            teste = BancoSenhas(os.path.join(BASE_DIR, "data", "cofre.db"), senha)
         except Exception:
             CTkMessageDialog("Erro", "Senha mestre incorreta. Cancelando reset.", tipo="error")
             return

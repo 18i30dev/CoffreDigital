@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['cofre.pyw'],
+    ['coffredigital/core.pyw'],
     pathex=[],
     binaries=[],
     datas=[],
@@ -35,5 +35,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['cadeado.ico'],
+    icon=['coffredigital/assets/icon/cadeado.ico'],
 )
