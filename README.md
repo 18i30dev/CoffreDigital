@@ -49,15 +49,3 @@ Ja logado, clique em **“Ver Chave Recuperacao”** na janela principal para ve
 Este projeto é educacional e de portifólio. Ele protege contra quem pegar o arquivo e tentar ler de repente, mas não substitui gerenciadores profissionais como Bitwarden ou 1Password.
 
 Não perca sua senha mestre: sem ela, não há como recuperar as senhas salvas.
-
-## No GitHub
-
-Se for colocar esse projeto no GitHub, **não commite esses arquivos**:
-
-- `cofre.db` — o banco com suas senhas
-- `recovery.key` e `recovery_view.key` — suas chaves de recuperação
-- `backup_senhas.txt` — backup com senhas em texto puro
-- `cofre.salt` — o salt de criptografia
-- `dist/`, `build/`, `__pycache__/` — arquivos gerados na compilação
-
-Um `.gitignore` ja está incluido na pasta para ajudar a nao subir isso por acidente.
