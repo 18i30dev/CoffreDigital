@@ -692,24 +692,21 @@ class AppCofre(ctk.CTkToplevel):
     def _mostrar_da_bandeja(self, icon, item):
         """Restaura a janela a partir da bandeja.
 
-        Se a sessao estiver bloqueada por inatividade, exige re-autenticacao
-        antes de exibir o cofre novamente.
-
         O callback do pystray roda na thread do icone, nao na thread
-        principal do tkinter. Chamar metodos do tkinter diretamente dali nao
-        e thread-safe. Usamos self.master.after(0, ...) para agendar a
-        restauracao na thread principal.
+        principal do tkinter. Usamos self.master.after(0, ...) para
+        agendar a restauracao na thread principal.
         """
         global tray_icon
 
         def _restaurar():
-            # Garante que a janela raiz esteja visível antes de mostrar o Toplevel
-            if self.master:
-                self.master.deiconify()
-                self.master.focus_force()
+            # Mostra a janela principal
+            self.deiconify()
+            self.focus_force()
+            self.master.deiconify()
+            self.master.focus_force()
 
+            # Se estiver bloqueado por inatividade, pede senha
             if self.bloqueado_por_inatividade:
-                # Pedir senha mestre para desbloquear (dialog ja e modal)
                 dialog = CTkInputDialog(
                     "Desbloquear sessao",
                     "Digite sua senha mestre:",
@@ -722,8 +719,6 @@ class AppCofre(ctk.CTkToplevel):
                             dialog.result,
                         )
                         self.bloqueado_por_inatividade = False
-                        self.deiconify()
-                        self.focus_force()
                         self._resetar_inatividade()
                     except Exception:
                         self.withdraw()
@@ -731,11 +726,12 @@ class AppCofre(ctk.CTkToplevel):
                 else:
                     self.withdraw()
                     self._criar_icone_bandeja()
-            else:
-                self.deiconify()
-                self.focus_force()
 
-        # Nao para o icone aqui; so paramos depois que a janela estiver visivel
+        # Para o icone da bandeja e mostra a janela na thread principal
+        if tray_icon:
+            tray_icon.stop()
+            tray_icon = None
+
         self.master.after(0, _restaurar)
 
     def _sair_da_bandeja(self, icon, item):
