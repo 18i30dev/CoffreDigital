@@ -817,7 +817,7 @@ class AppCofre(ctk.CTkToplevel):
             self.carregar_lista()
             self.clipboard_clear()
             self.clipboard_append(senha)
-            CTkMessageDialog("Senha gerada", f"Senha gerada para {servico}:\\n{senha}\\n\\nEla foi copiada para a area de transferencia e salva no cofre.", tipo="info")
+            CTkMessageDialog("Senha gerada", f"Senha gerada para {servico}:\n\nSenha: {senha}\n\nEla foi copiada para a área de transferência e salva no cofre.", tipo="info")
             # Limpa a area de transferencia apos 30 segundos por seguranca
             self.after(30000, self.clipboard_clear)
         except Exception as e:
