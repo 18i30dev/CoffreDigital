@@ -11,8 +11,13 @@ import secrets
 import ctypes
 import sys
 
-# Diretório base do projeto (um nível acima deste arquivo)
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Diretório base do projeto (funciona tanto em desenvolvimento quanto em executável PyInstaller)
+if getattr(sys, 'frozen', False):
+    # Executável PyInstaller: usa o diretório do .exe
+    BASE_DIR = os.path.dirname(sys.executable)
+else:
+    # Execução via Python: usa o diretório do projeto (um nível acima deste arquivo)
+    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # ============================
 # Dialogs personalizados (estilo CustomTkinter)
