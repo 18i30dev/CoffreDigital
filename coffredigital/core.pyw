@@ -693,21 +693,43 @@ class AppCofre(ctk.CTkToplevel):
         """Restaura a janela a partir da bandeja."""
         global tray_icon
 
+        # Para o ícone da bandeja
         if tray_icon:
             tray_icon.stop()
             tray_icon = None
 
-        self.master.after(10, self._restaurar_janela)
-
-    def _restaurar_janela(self):
-        """Restaura a janela principal na thread do tkinter."""
+        # Mostra a janela diretamente (mesmo na thread do pystray, pode funcionar no Windows)
         self.master.deiconify()
         self.master.lift()
         self.master.focus_force()
+        self.master.update()
 
         self.deiconify()
         self.lift()
         self.focus_force()
+        self.update()
+
+        # Se estiver bloqueado por inatividade, pede senha
+        if self.bloqueado_por_inatividade:
+            dialog = CTkInputDialog(
+                "Desbloquear sessao",
+                "Digite sua senha mestre:",
+                show="*",
+            )
+            if dialog.result:
+                try:
+                    BancoSenhas(
+                        os.path.join(BASE_DIR, "data", "cofre.db"),
+                        dialog.result,
+                    )
+                    self.bloqueado_por_inatividade = False
+                    self._resetar_inatividade()
+                except Exception:
+                    self.withdraw()
+                    self._criar_icone_bandeja()
+            else:
+                self.withdraw()
+                self._criar_icone_bandeja()
 
     def _sair_da_bandeja(self, icon, item):
         """Fecha completamente o aplicativo a partir da bandeja.
