@@ -695,39 +695,48 @@ class AppCofre(ctk.CTkToplevel):
         Se a sessao estiver bloqueada por inatividade, exige re-autenticacao
         antes de exibir o cofre novamente.
 
-        O callback do pystray roda na thread do ícone, nao na thread
-        principal do tkinter. Chamar self.deiconify() diretamente dali nao
-        e thread-safe e pode fazer a janela nao aparecer e o icone sumir.
-        Usamos self.after(0, ...) para agendar a restauracao na thread
-        principal.
+        O callback do pystray roda na thread do icone, nao na thread
+        principal do tkinter. Chamar metodos do tkinter diretamente dali nao
+        e thread-safe. Usamos self.master.after(0, ...) para agendar a
+        restauracao na thread principal.
         """
         global tray_icon
-        if tray_icon:
-            tray_icon.stop()
-            tray_icon = None
 
         def _restaurar():
             # Garante que a janela raiz esteja visível antes de mostrar o Toplevel
             if self.master:
                 self.master.deiconify()
+                self.master.focus_force()
 
             if self.bloqueado_por_inatividade:
-                login = TelaLogin(self.master)
-                self.master.wait_window(login)
-                if login.senha_correta:
-                    self.bloqueado_por_inatividade = False
-                    self.deiconify()
-                    self.focus_force()
-                    self._resetar_inatividade()
+                # Pedir senha mestre para desbloquear (dialog ja e modal)
+                dialog = CTkInputDialog(
+                    "Desbloquear sessao",
+                    "Digite sua senha mestre:",
+                    show="*",
+                )
+                if dialog.result:
+                    try:
+                        BancoSenhas(
+                            os.path.join(BASE_DIR, "data", "cofre.db"),
+                            dialog.result,
+                        )
+                        self.bloqueado_por_inatividade = False
+                        self.deiconify()
+                        self.focus_force()
+                        self._resetar_inatividade()
+                    except Exception:
+                        self.withdraw()
+                        self._criar_icone_bandeja()
                 else:
-                    # Senha incorreta ou cancelado: mantem escondido e recria icone
                     self.withdraw()
                     self._criar_icone_bandeja()
             else:
                 self.deiconify()
                 self.focus_force()
 
-        self.after(0, _restaurar)
+        # Nao para o icone aqui; so paramos depois que a janela estiver visivel
+        self.master.after(0, _restaurar)
 
     def _sair_da_bandeja(self, icon, item):
         """Fecha completamente o aplicativo a partir da bandeja.
