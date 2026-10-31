@@ -19,6 +19,15 @@ else:
     # Execução via Python: usa o diretório do projeto (um nível acima deste arquivo)
     BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+
+def resource_path(caminho_relativo):
+    """Resolve caminho de recursos (icone, etc.) em desenvolvimento e no .exe."""
+    if getattr(sys, 'frozen', False):
+        # No modo frozen, o PyInstaller extrai arquivos para sys._MEIPASS
+        base = getattr(sys, '_MEIPASS', os.path.dirname(sys.executable))
+        return os.path.join(base, caminho_relativo)
+    return os.path.join(BASE_DIR, caminho_relativo)
+
 # ============================
 # Dialogs personalizados (estilo CustomTkinter)
 # Substituem messagebox e simpledialog nativas do tkinter
@@ -667,7 +676,7 @@ class AppCofre(ctk.CTkToplevel):
             return
 
         try:
-            imagem = Image.open(os.path.join(BASE_DIR, "coffredigital", "assets", "icon", "cadeado.ico"))
+            imagem = Image.open(resource_path(os.path.join("coffredigital", "assets", "icon", "cadeado.ico")))
         except Exception:
             # Fallback: cria um icone simples se nao encontrar o arquivo
             imagem = Image.new("RGB", (64, 64), color=(0, 122, 255))
@@ -691,9 +700,13 @@ class AppCofre(ctk.CTkToplevel):
             tray_icon.stop()
             tray_icon = None
 
+        # Garante que a janela raiz esteja visível antes de mostrar o Toplevel
+        if self.master:
+            self.master.deiconify()
+
         if self.bloqueado_por_inatividade:
-            login = TelaLogin()
-            login.mainloop()
+            login = TelaLogin(self.master)
+            self.master.wait_window(login)
             if login.senha_correta:
                 self.bloqueado_por_inatividade = False
                 self.deiconify()
@@ -920,7 +933,8 @@ if __name__ == "__main__":
         sys.exit(0)
 
     raiz = ctk.CTk()
-    raiz.withdraw()
+    # Nao esconde a raiz: Toplevel precisa de pai visível para aparecer corretamente
+    # raiz.withdraw()
 
     try:
         login = TelaLogin(raiz)

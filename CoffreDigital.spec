@@ -5,7 +5,7 @@ a = Analysis(
     ['coffredigital/core.pyw'],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=[('coffredigital/assets/icon/cadeado.ico', 'coffredigital/assets/icon')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
